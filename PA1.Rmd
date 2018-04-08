@@ -1,0 +1,116 @@
+---
+title: "Reproducable Research Assignment  (Week 2)"
+output: html_document
+---
+
+This is a project on a dataset of `moement sensors in wearable devices'. The dataset loaded contained the number of steps in 5-min intervals for a couple of days. The variablesa re the number of steps, date, and intervals. 
+
+In this project we compare the mean of the number of steps throughout a typical day. Also we try to impute data by replacing *NA* values with some reasonable values. We compare results for different days of weeks. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE) 
+```
+
+## Read files
+
+In this part, we read the source file from web. Next we unzip the zip file, and read the csv file into *df* var. 
+ 
+
+```{r readfile}
+link1 <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip" 
+download.file( url = link1,destfile = "activity.zip") 
+df_original <- read.csv(unzip("activity.zip"))
+```
+
+## What is mean total number of steps taken per day?
+ 
+In this part, we remove **NA** values here.  Then we obtain the total number of steps for each day. The mean and median number of steps are also computed. 
+
+```{r total}
+df <- df_original[!is.na(df_original[,1]),]
+StepDaily <-  tapply(df$steps,df$date,sum)
+print("Number of steps per day:")
+StepDaily
+```
+### mean of steps: 
+```{r mean}
+mean(StepDaily,na.rm = T)
+```
+median of steps: 
+```{r med}
+median(StepDaily,na.rm = T)
+```
+```{r plotHist}
+hist(StepDaily, xlab = "number of steps per day", main = "Histogram of steps per day")
+```
+
+
+## What is the average daily activity pattern?
+
+In this part, we compare the activity pattern thourghout a typical day by average of the number of steps durign 5-min intervals.
+
+```{r time series}
+library(dplyr)
+TS <- df %>% group_by(interval) %>% summarise(meanSteps = mean(steps))
+plot(TS$interval,TS$meanSteps,type="l",xlab = "5-min intervals during a typical day", ylab = "mean of number of steps", main = "time series plot for average steps in a day")
+```
+
+The 5-min Interval with maximum Mean Steps (mean over all days) is
+```{r maxStps}  
+as.numeric(TS[ TS$meanSteps == max(TS$meanSteps), 1])
+```
+ 
+## Imputing missing values
+In this part, we impute data to replace *NA* values with a reasonable. We replace missing values with the average of steps for similar interval over all days. 
+
+The total number of rows with *NA* steps is
+```{r missing}
+sum(is.na(df_original$steps))
+```
+ 
+
+Here we create a new dataset from the original dataset by replacing *NA* values of **Steps** with the average steps for the same interval over all days
+```{r missingFilling}
+imputDF <- left_join(df_original,TS, by = "interval")
+imputDF[is.na(imputDF[,1]),1] <- imputDF[is.na(imputDF[,1]),4]
+imputDF <- imputDF[,-4]
+```
+
+### A histogram of  *Steps*,  the mean and median of steps
+
+mean of steps:
+```{r mean2}
+impSumm <- imputDF %>% group_by(date) %>% summarise(SumStp = sum(steps))
+mean(impSumm$SumStp)
+```
+median of steps: 
+```{r med2}
+median(impSumm$SumStp )
+```
+```{r plotHist2}
+hist(impSumm$SumStp, xlab = "number of steps per day", main = "Histogram of steps per day (imputed data)")
+```
+
+
+## Activity patterns between weekdays and weekends
+
+An interesting question is how the activity pattern changes according to weekend or weekday. Here are answers:
+
+```{r week}
+imputDF$weekNm <- weekdays(as.Date(imputDF$date))
+weekD <- c("Tuesday","Monday","Friday","Wednesday","Thursday")
+weekend <- c("Saturday","Sunday")
+imputDF[imputDF$weekNm %in% weekD,5] <- "weekday"
+imputDF[imputDF$weekNm %in% weekend,5] <- "weekend"
+imputDF <- imputDF[,-4]
+names(imputDF) <- c("steps","date","interval","day_week")
+```
+
+## Time series plot of the average number of steps across all weekdays or weekends 
+
+```{r plotWeek}
+dfAve <- imputDF %>% group_by(interval,day_week) %>% summarise(meanSteps = mean(steps))
+par(mfrow = c(1, 2))
+library(ggplot2) 
+qplot( interval, meanSteps, facets = .~day_week,data=dfAve,geom = "line"  )
+```
